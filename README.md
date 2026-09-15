@@ -4,7 +4,7 @@ Eine Manifest-V3-Erweiterung, die eine normale Reservierung auf `https://anny.eu
 
 ## Funktionsweise
 
-1. Die Erweiterung erkennt den kurzlebigen Bearer-Token automatisch aus den API-Aufrufen, mit denen der geöffnete Anny-Planner seine Daten lädt. Der Token muss nicht eingegeben oder kopiert werden.
+1. Die Erweiterung beobachtet ausschließlich im Anny-Tab Aufrufe an `POST https://b.anny.eu/api/v1/bookings/instant`.
 2. Nach einer normalen Reservierung öffnet sie das seitliche Panel und übernimmt Ressource, Service sowie lokale Start-/Endzeit als Vorlage.
 3. Nutzer wählen 1–365 kommende Kalendertage, Wochentage, Start-/Endzeit und die Zeitzone. Der Ausgangstag wird absichtlich nicht erneut gebucht.
 4. Nach einer expliziten Bestätigung werden die zusätzlichen Reservierungen nacheinander erstellt. Resultate werden einzeln angezeigt; Konflikte werden nicht überschrieben.
@@ -28,7 +28,7 @@ Die Erweiterung ist bewusst ohne Runtime- oder Build-Abhängigkeiten umgesetzt. 
 ## Grenzen und Sicherheit
 
 - Nur Reservierungen, die der angemeldete Anny-Nutzer auch regulär anlegen dürfte, sind möglich.
-- Die Anmeldung wird automatisch aus regulären Anny-API-Aufrufen erkannt. Als fachliche Vorlage muss weiterhin im selben Tab eine normale Reservierung ausgelöst werden, weil nur deren Request die Ressourcen-, Service- und Zeitoptionen vollständig enthält.
+- Vor dem ersten Lauf muss im selben Tab eine normale Reservierung erstellt werden, damit Vorlage und kurzlebige Anmeldung erkannt werden.
 - Der Dialog zeigt die Anzahl verbindlicher Buchungen vor dem Absenden; ein erfolgreicher Teil-Lauf wird bei späteren Fehlern nicht zurückgerollt.
 - Keine Secrets, insbesondere keine Bearer-Tokens, in Quelltext, Issues oder Logs übernehmen. Das im ursprünglichen Arbeitsauftrag enthaltene Beispiel-Token sollte als kompromittiert betrachtet und widerrufen werden.
 
