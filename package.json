@@ -4,7 +4,7 @@
   "private": true,
   "description": "Microsoft-Edge-Erweiterung für wiederkehrende Anny-Reservierungen",
   "scripts": {
-    "check": "node scripts/check.mjs",
+    "check": "node --check src/bridge-main.js && node --check src/content.js && node --check src/recurrence.js",
     "test": "node --test",
     "package": "node scripts/package.mjs"
   },

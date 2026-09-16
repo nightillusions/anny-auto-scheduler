@@ -18,7 +18,7 @@
       <aside id="anny-series-panel" class="as-panel" aria-label="Serienreservierung" hidden>
         <header><div><strong>Serienreservierung</strong><small>Nur für diese Anny-Seite</small></div><button class="as-close" type="button" aria-label="Schließen">×</button></header>
         <div class="as-body">
-          <div class="as-template" role="status">Anmeldung wird automatisch erkannt. Lege danach eine normale Reservierung als Vorlage an.</div>
+          <div class="as-template" role="status">Lege zuerst eine normale Reservierung an. Deren Ressource und Optionen werden automatisch als Vorlage übernommen.</div>
           <label>Zeitraum <span><input name="days" type="number" min="1" max="365" value="30"> Tage</span></label>
           <fieldset><legend>Wochentage</legend><div class="as-days">${weekdays.map(([value, label]) => `<label><input type="checkbox" value="${value}" ${value > 0 && value < 6 ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset>
           <div class="as-times"><label>Von <input name="start-time" type="time" step="60" required disabled></label><label>Bis <input name="end-time" type="time" step="60" required disabled></label></div>
@@ -96,10 +96,7 @@
   window.addEventListener("message", (event) => {
     const message = event.data;
     if (event.source !== window || event.origin !== window.location.origin || message?.channel !== CHANNEL) return;
-    if (message.type === "auth-ready") {
-      mount();
-      if (!template) document.querySelector("#anny-series-root .as-template").innerHTML = "<b>Anmeldung erkannt</b><span>Lege jetzt eine normale Reservierung als Vorlage an.</span>";
-    } else if (message.type === "template") {
+    if (message.type === "template") {
       template = message.payload;
       mount();
       const root = document.getElementById("anny-series-root");

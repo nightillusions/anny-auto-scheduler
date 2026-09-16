@@ -4,7 +4,6 @@
   window.__annySeriesBridgeInstalled = true;
 
   const CHANNEL = "anny-series-reservation-v1";
-  const API_ORIGIN = "https://b.anny.eu";
   const ENDPOINT = "https://b.anny.eu/api/v1/bookings/instant";
   let credentials = null;
 
@@ -12,22 +11,11 @@
     try { return new Headers(headers || {}).get(name); } catch { return null; }
   }
 
-  function isAnnyApiUrl(url) {
-    try { return new URL(String(url), window.location.href).origin === API_ORIGIN; } catch { return false; }
-  }
-
   function inspect(url, init) {
-    if (!isAnnyApiUrl(url)) return;
+    if (!String(url).startsWith(ENDPOINT) || init?.method?.toUpperCase() !== "POST") return;
     const authorization = headerValue(init.headers, "authorization");
     const appKey = headerValue(init.headers, "x-app-key") || "anny_shop";
-    // Capture the short-lived Bearer token from any Anny API request. The planner
-    // normally loads data before a booking is submitted, so series creation no
-    // longer depends on completing an initial booking first.
-    if (authorization?.startsWith("Bearer ")) {
-      credentials = { authorization, appKey };
-      window.postMessage({ channel: CHANNEL, type: "auth-ready" }, window.location.origin);
-    }
-    if (!String(url).startsWith(ENDPOINT) || init?.method?.toUpperCase() !== "POST") return;
+    if (authorization) credentials = { authorization, appKey };
     try {
       const payload = typeof init.body === "string" ? JSON.parse(init.body) : init.body;
       if (payload?.resource_id && payload?.service_id && payload?.start_date && payload?.end_date) {
@@ -39,12 +27,7 @@
   const nativeFetch = window.fetch.bind(window);
   window.fetch = function monitoredFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input.url;
-    const merged = input instanceof Request
-      ? { ...init, method: init.method || input.method, headers: new Headers(input.headers) }
-      : init;
-    if (input instanceof Request && init.headers) {
-      for (const [name, value] of new Headers(init.headers)) merged.headers.set(name, value);
-    }
+    const merged = input instanceof Request ? { method: input.method, headers: input.headers, ...init } : init;
     if (input instanceof Request && init.body === undefined) {
       // Request bodies are streams. Read a clone without delaying or consuming the
       // request Anny sends, otherwise clients using fetch(new Request(...)) are missed.
