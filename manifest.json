@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Anny Serienreservierung",
+  "version": "1.0.0",
+  "description": "Wiederholt eine in Anny angelegte Reservierung an ausgewählten Wochentagen.",
+  "permissions": [],
+  "host_permissions": ["https://anny.eu/*", "https://b.anny.eu/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://anny.eu/planner*", "https://anny.eu/planner/*"],
+      "js": ["src/bridge-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://anny.eu/planner*", "https://anny.eu/planner/*"],
+      "js": ["src/recurrence.js", "src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "Anny Serienreservierung öffnen"
+  }
+}
