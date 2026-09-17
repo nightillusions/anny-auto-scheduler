@@ -68,6 +68,7 @@
       minDuration: integerOrNull(attributes.min_duration),
       maxDuration: integerOrNull(attributes.max_duration),
       bookingInterval: integerOrNull(service?.attributes?.booking_interval ?? attributes.booking_interval),
+      hasFlexibleDuration: attributes.has_flexible_duration === true,
       allowsCrossSchedule: attributes.allows_cross_schedule === true,
       allowEndOffSchedule: service?.attributes?.allow_end_off_schedule === true
     };
@@ -129,8 +130,10 @@
       throw new RangeError("Die Endzeit muss nach der Startzeit liegen.");
     }
     const durationMinutes = endDayDelta * 1440 + (endTime[0] * 60 + endTime[1]) - (startTime[0] * 60 + startTime[1]);
-    if (Number.isInteger(options.minDuration) && durationMinutes < options.minDuration) throw new RangeError(`Die Buchungsdauer muss mindestens ${options.minDuration} Minuten betragen.`);
-    if (Number.isInteger(options.maxDuration) && durationMinutes > options.maxDuration) throw new RangeError(`Die Buchungsdauer darf höchstens ${options.maxDuration} Minuten betragen.`);
+    if (options.enforceDurationLimits) {
+      if (Number.isInteger(options.minDuration) && durationMinutes < options.minDuration) throw new RangeError(`Die Buchungsdauer muss mindestens ${options.minDuration} Minuten betragen.`);
+      if (Number.isInteger(options.maxDuration) && durationMinutes > options.maxDuration) throw new RangeError(`Die Buchungsdauer darf höchstens ${options.maxDuration} Minuten betragen.`);
+    }
     const results = [];
     for (let day = 1; day <= horizon; day += 1) {
       const startDate = addDays(originalStart, day);

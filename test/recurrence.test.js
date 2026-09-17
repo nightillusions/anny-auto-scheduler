@@ -55,15 +55,21 @@ test("extracts Tagesbuchung default times from service configurations", () => {
 
 test("extracts flexible duration rules from a service configuration", () => {
   const response = {
-    data: { attributes: { label: "Flex Buchung", default_start_time: "09:00:00", default_end_time: "18:00:00", min_duration: 120, max_duration: 600, allows_cross_schedule: false, services_with_quantity: [{ service: { id: 310 } }] } },
+    data: { attributes: { label: "Flex Buchung", default_start_time: "09:00:00", default_end_time: "18:00:00", min_duration: 120, max_duration: 600, has_flexible_duration: true, allows_cross_schedule: false, services_with_quantity: [{ service: { id: 310 } }] } },
     included: [{ type: "services", id: "310", attributes: { booking_interval: 60, allow_end_off_schedule: false } }]
   };
-  assert.deepEqual(extractBookingTimeRules(response), { label: "Flex Buchung", serviceId: "310", startTime: "09:00", endTime: "18:00", minDuration: 120, maxDuration: 600, bookingInterval: 60, allowsCrossSchedule: false, allowEndOffSchedule: false });
+  assert.deepEqual(extractBookingTimeRules(response), { label: "Flex Buchung", serviceId: "310", startTime: "09:00", endTime: "18:00", minDuration: 120, maxDuration: 600, bookingInterval: 60, hasFlexibleDuration: true, allowsCrossSchedule: false, allowEndOffSchedule: false });
 });
 
 test("rejects manually selected durations outside flexible service limits", () => {
   const template = { resource_id: "1", service_id: "310", start_date: "2026-09-26T09:00:00+02:00", end_date: "2026-09-26T18:00:00+02:00" };
-  const options = { days: 1, weekdays: [6], timeZone: "Europe/Berlin", minDuration: 120, maxDuration: 600 };
+  const options = { days: 1, weekdays: [6], timeZone: "Europe/Berlin", minDuration: 120, maxDuration: 600, enforceDurationLimits: true };
   assert.throws(() => buildOccurrences(template, { ...options, startTime: "09:00", endTime: "10:30" }), /mindestens 120/);
   assert.throws(() => buildOccurrences(template, { ...options, startTime: "09:00", endTime: "19:30" }), /höchstens 600/);
+});
+
+test("does not apply fixed booking duration metadata as an editable duration limit", () => {
+  const template = { resource_id: "1", service_id: "307", start_date: "2026-09-26T06:00:00+02:00", end_date: "2026-09-26T20:00:00+02:00" };
+  const result = buildOccurrences(template, { days: 1, weekdays: [0], timeZone: "Europe/Berlin", startTime: "06:00", endTime: "20:00", minDuration: 1440, maxDuration: 1440, enforceDurationLimits: false });
+  assert.equal(result.length, 1);
 });

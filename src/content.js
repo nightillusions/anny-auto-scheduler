@@ -71,9 +71,11 @@
   function applyCurrentServiceConfiguration(applyDefaults) {
     const root = document.getElementById("anny-series-root");
     if (!root || !selectedResource) return;
+    const selectedResourceId = String(selectedResource.resource_id);
+    const selectedResourceIdIsNumeric = /^\d+$/.test(selectedResourceId);
     const configuration = [...serviceConfigurations].reverse().find((item) =>
-      (!item.resourceId || item.resourceId === String(selectedResource.resource_id)) &&
-      (!item.serviceId || item.serviceId === String(selectedResource.service_id))
+      (!item.serviceId || item.serviceId === String(selectedResource.service_id)) &&
+      (!item.resourceId || item.resourceId === selectedResourceId || !selectedResourceIdIsNumeric)
     );
     if (!configuration) return;
     const rules = AnnyRecurrence.extractBookingTimeRules(configuration.response);
@@ -84,7 +86,7 @@
       root.querySelector('[name="end-time"]').value = rules.endTime;
     }
     const formatDuration = (minutes) => minutes % 60 === 0 ? `${minutes / 60} Std.` : `${minutes} Min.`;
-    const duration = rules.minDuration != null && rules.maxDuration != null ? `Dauer: ${formatDuration(rules.minDuration)} bis ${formatDuration(rules.maxDuration)}` : "";
+    const duration = rules.hasFlexibleDuration && rules.minDuration != null && rules.maxDuration != null ? `Dauer: ${formatDuration(rules.minDuration)} bis ${formatDuration(rules.maxDuration)}` : "";
     const interval = rules.bookingInterval ? `Start im ${rules.bookingInterval}-Minuten-Intervall` : "";
     const schedule = !rules.allowsCrossSchedule || !rules.allowEndOffSchedule ? "Ressourcenzeitplan wird von Anny geprüft" : "";
     const note = root.querySelector(".as-time-rules");
@@ -102,7 +104,8 @@
       endTime: root.querySelector('[name="end-time"]').value,
       latestEnd: advanceBookingCutoff,
       minDuration: bookingTimeRules?.minDuration,
-      maxDuration: bookingTimeRules?.maxDuration
+      maxDuration: bookingTimeRules?.maxDuration,
+      enforceDurationLimits: bookingTimeRules?.hasFlexibleDuration
     });
   }
 
