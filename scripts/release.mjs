@@ -26,6 +26,7 @@ async function updateVersion(file, version) {
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const version = nextVersion(packageJson.version);
 await Promise.all([updateVersion("package.json", version), updateVersion("manifest.json", version)]);
+execFileSync(process.execPath, ["scripts/package.mjs"], { stdio: "inherit" });
 
 execFileSync("git", ["add", "--", ...files, "package.json", "manifest.json"], { stdio: "inherit" });
 const prefix = changeType === "breaking" ? "feat!" : changeType;

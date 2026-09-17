@@ -1,6 +1,6 @@
 {
   "name": "anny-auto-scheduler",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Microsoft-Edge-Erweiterung für wiederkehrende Anny-Reservierungen",
   "scripts": {

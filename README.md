@@ -48,4 +48,4 @@ Die verbindlichen Projektregeln für KI-Agenten stehen in `.github/copilot-instr
 bun run release -- fix "Vorausbuchungslimit berücksichtigen" src/bridge-main.js src/content.js src/recurrence.js test/recurrence.test.js README.md .github/copilot-instructions.md scripts/release.mjs
 ```
 
-Der Befehl erstellt den Commit und erhöht die Version synchron in `package.json` und `manifest.json`: `fix` erhöht Patch, `feat` Minor und `breaking` Major.
+Der Befehl erstellt den Commit, erhöht die Version synchron in `package.json` und `manifest.json` und erzeugt anschließend den aktuellen Edge-Auslieferungsordner `dist/anny-series-reservation`: `fix` erhöht Patch, `feat` Minor und `breaking` Major. In Edge muss die bereits geladene Erweiterung nach einem Release über `edge://extensions` neu geladen werden; dort zeigt Edge dann diese Manifest-Version an.
