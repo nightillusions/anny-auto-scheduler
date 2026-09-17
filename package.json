@@ -1,12 +1,15 @@
 {
   "name": "anny-auto-scheduler",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Microsoft-Edge-Erweiterung für wiederkehrende Anny-Reservierungen",
   "scripts": {
     "check": "node scripts/check.mjs",
     "test": "node --test",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "release": "node scripts/release.mjs"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

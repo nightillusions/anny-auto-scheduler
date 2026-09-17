@@ -36,10 +36,52 @@
     return `${parts[0]}-${pad(parts[1])}-${pad(parts[2])}T${pad(parts[3])}:${pad(parts[4])}:${pad(parts[5])}${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)}`;
   }
 
+  function parseUnavailableIntervalCutoff(body, timeZone) {
+    try {
+      const error = JSON.parse(body).errors?.find((item) => item.code === "unavailable_interval");
+      const match = /(?:am|on)\s+(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/i.exec(error?.detail || "");
+      if (!match) return null;
+      return zonedIso([Number(match[3]), Number(match[2]), Number(match[1]), Number(match[4]), Number(match[5]), Number(match[6] || 0)], timeZone);
+    } catch {
+      return null;
+    }
+  }
+
+  function extractAdvanceBookingCutoff(data, timeZone, now = new Date()) {
+    const candidates = [];
+    const isLimitKey = (path) => /(advance|ahead|future|voraus)/i.test(path) && /(book|reserv|period|window|range|limit)/i.test(path);
+    const localDate = (instant) => {
+      const fields = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant).filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]));
+      return [fields.year, fields.month, fields.day];
+    };
+    const addCandidate = (value) => {
+      if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 3660) {
+        const date = addDays([...localDate(now), 0, 0, 0], value);
+        candidates.push(zonedIso([...date.slice(0, 3), 23, 59, 0], timeZone));
+      } else if (typeof value === "string") {
+        const local = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (local) candidates.push(zonedIso([Number(local[1]), Number(local[2]), Number(local[3]), 23, 59, 0], timeZone));
+        else if (!Number.isNaN(new Date(value).getTime())) candidates.push(value);
+      }
+    };
+    const visit = (value, path = "") => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value)) {
+        const childPath = `${path}.${key}`;
+        if (isLimitKey(childPath)) addCandidate(child);
+        visit(child, childPath);
+      }
+    };
+    visit(data);
+    return candidates.sort((left, right) => new Date(left) - new Date(right))[0] || null;
+  }
+
   function buildOccurrences(template, options) {
     const horizon = Number(options.days);
     if (!Number.isInteger(horizon) || horizon < 1 || horizon > 365) throw new RangeError("Der Zeitraum muss zwischen 1 und 365 Tagen liegen.");
     if (!Array.isArray(options.weekdays) || options.weekdays.length === 0) throw new RangeError("Mindestens einen Wochentag auswählen.");
+    const latestEnd = options.latestEnd ? new Date(options.latestEnd) : null;
+    if (latestEnd && Number.isNaN(latestEnd.getTime())) throw new TypeError("Ungültiges Ende des Vorausbuchungszeitraums.");
     // The API values carry local wall-clock times. Recreate these rather than adding
     // 24-hour durations so reservations remain stable across daylight-saving changes.
     const originalStart = parseLocal(template.start_date);
@@ -68,17 +110,18 @@
       if (!options.weekdays.includes(weekday)) continue;
       const endDate = addDays(start, endDayDelta);
       const end = [...endDate.slice(0, 3), ...endTime];
-      results.push({
+      const occurrence = {
         resource_id: String(template.resource_id),
         service_id: String(template.service_id),
         start_date: zonedIso(start, options.timeZone),
         end_date: zonedIso(end, options.timeZone)
-      });
+      };
+      if (!latestEnd || new Date(occurrence.end_date) < latestEnd) results.push(occurrence);
     }
     return results;
   }
 
-  const api = Object.freeze({ buildOccurrences, parseLocal, zonedIso });
+  const api = Object.freeze({ buildOccurrences, extractAdvanceBookingCutoff, parseLocal, parseUnavailableIntervalCutoff, zonedIso });
   root.AnnyRecurrence = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof globalThis === "undefined" ? window : globalThis);

@@ -5,6 +5,8 @@
 
   const CHANNEL = "anny-series-reservation-v1";
   const ENDPOINT = "https://b.anny.eu/api/v1/bookings/instant";
+  const LOCATIONS_ENDPOINT = "https://b.anny.eu/api/v1/resources/locations";
+  const RESOURCE_CHILDREN_PATTERN = /^https:\/\/b\.anny\.eu\/api\/v1\/resources\/([^/?]+)\/children(?:[/?]|$)/;
   let credentials = null;
 
   function headerValue(headers, name) {
@@ -24,6 +26,46 @@
     } catch { /* Ignore request bodies that are not JSON. */ }
   }
 
+  function inspectResourceSelection(url, init) {
+    const match = RESOURCE_CHILDREN_PATTERN.exec(String(url));
+    if (!match || (init?.method && init.method.toUpperCase() !== "GET")) return;
+    const authorization = headerValue(init?.headers, "authorization");
+    const appKey = headerValue(init?.headers, "x-app-key") || "anny_shop";
+    if (authorization) credentials = { authorization, appKey };
+    try {
+      const requestUrl = new URL(url, window.location.origin);
+      const serviceId = requestUrl.searchParams.get("filter[availability_service_id]");
+      window.postMessage({
+        channel: CHANNEL,
+        type: "resource-selected",
+        payload: {
+          resource_id: decodeURIComponent(match[1]),
+          service_id: serviceId,
+          available_from: requestUrl.searchParams.get("filter[available_from]"),
+          available_to: requestUrl.searchParams.get("filter[available_to]")
+        }
+      }, window.location.origin);
+    } catch { /* Ignore malformed resource-selection requests. */ }
+  }
+
+  function inspectLocations(url, body) {
+    if (!String(url).startsWith(LOCATIONS_ENDPOINT)) return;
+    try {
+      const values = [];
+      const isLimitKey = (path) => /(advance|ahead|future|voraus)/i.test(path) && /(book|reserv|period|window|range|limit)/i.test(path);
+      const visit = (value, path = "") => {
+        if (!value || typeof value !== "object") return;
+        for (const [key, child] of Object.entries(value)) {
+          const childPath = `${path}.${key}`;
+          if (isLimitKey(childPath) && (typeof child === "string" || typeof child === "number")) values.push(child);
+          visit(child, childPath);
+        }
+      };
+      visit(JSON.parse(body));
+      if (values.length) window.postMessage({ channel: CHANNEL, type: "advance-booking-limits", values }, window.location.origin);
+    } catch { /* Ignore unavailable or changed locations responses. */ }
+  }
+
   const nativeFetch = window.fetch.bind(window);
   window.fetch = function monitoredFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input.url;
@@ -35,7 +77,10 @@
     } else {
       inspect(url, merged);
     }
-    return nativeFetch(input, init);
+    inspectResourceSelection(url, merged);
+    const response = nativeFetch(input, init);
+    if (String(url).startsWith(LOCATIONS_ENDPOINT)) response.then((result) => result.clone().text().then((body) => inspectLocations(url, body)).catch(() => {})).catch(() => {});
+    return response;
   };
 
   // Anny may switch its HTTP client implementation without changing the API.
@@ -53,6 +98,10 @@
   };
   XMLHttpRequest.prototype.send = function monitoredSend(body) {
     if (this.__annySeriesRequest) inspect(this.__annySeriesRequest.url, { ...this.__annySeriesRequest, body });
+    if (this.__annySeriesRequest) inspectResourceSelection(this.__annySeriesRequest.url, this.__annySeriesRequest);
+    if (this.__annySeriesRequest && String(this.__annySeriesRequest.url).startsWith(LOCATIONS_ENDPOINT)) {
+      this.addEventListener("loadend", () => inspectLocations(this.__annySeriesRequest.url, this.responseText), { once: true });
+    }
     return nativeSend.call(this, body);
   };
 

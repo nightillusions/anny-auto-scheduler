@@ -4,6 +4,8 @@
   const weekdays = [[1, "Mo"], [2, "Di"], [3, "Mi"], [4, "Do"], [5, "Fr"], [6, "Sa"], [0, "So"]];
   let template = null;
   let running = false;
+  let advanceBookingCutoff = null;
+  let pendingAdvanceBookingValues = [];
   const pending = new Map();
 
   function escapeHtml(value) {
@@ -39,6 +41,16 @@
     root.addEventListener("change", updatePreview);
   }
 
+  function showResourceSelection(selection) {
+    mount();
+    const root = document.getElementById("anny-series-root");
+    if (!root) return;
+    const service = selection.service_id ? ` · Service ${escapeHtml(selection.service_id)}` : "";
+    root.querySelector(".as-template").innerHTML = `<b>Ressource ausgewählt</b><span>Ressource ${escapeHtml(selection.resource_id)}${service}<br>Lege eine normale Reservierung an, um Zeitraum und Optionen als Vorlage zu übernehmen.</span>`;
+    root.querySelector(".as-panel").hidden = false;
+    root.querySelector(".as-trigger").setAttribute("aria-expanded", "true");
+  }
+
   function occurrences() {
     const root = document.getElementById("anny-series-root");
     return AnnyRecurrence.buildOccurrences(template, {
@@ -46,7 +58,8 @@
       weekdays: [...root.querySelectorAll('.as-days input:checked')].map((input) => Number(input.value)),
       timeZone: root.querySelector('[name="timezone"]').value.trim(),
       startTime: root.querySelector('[name="start-time"]').value,
-      endTime: root.querySelector('[name="end-time"]').value
+      endTime: root.querySelector('[name="end-time"]').value,
+      latestEnd: advanceBookingCutoff
     });
   }
 
@@ -55,7 +68,8 @@
     if (!root || !template) return;
     try {
       const count = occurrences().length;
-      root.querySelector(".as-preview").textContent = `${count} zusätzliche Reservierung${count === 1 ? "" : "en"} geplant`;
+      const cutoffNote = advanceBookingCutoff ? ` bis vor ${new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: root.querySelector('[name="timezone"]').value.trim() }).format(new Date(advanceBookingCutoff))}` : "";
+      root.querySelector(".as-preview").textContent = `${count} zusätzliche Reservierung${count === 1 ? "" : "en"} geplant${cutoffNote}`;
       root.querySelector(".as-submit").disabled = running || count === 0;
     } catch (error) {
       root.querySelector(".as-preview").textContent = error.message;
@@ -72,6 +86,15 @@
     });
   }
 
+  function applyAdvanceBookingLimits(values) {
+    const root = document.getElementById("anny-series-root");
+    if (!root) return false;
+    const timeZone = root.querySelector('[name="timezone"]').value.trim();
+    const cutoff = AnnyRecurrence.extractAdvanceBookingCutoff({ booking_in_advance: values }, timeZone);
+    if (cutoff && (!advanceBookingCutoff || new Date(cutoff) < new Date(advanceBookingCutoff))) advanceBookingCutoff = cutoff;
+    return true;
+  }
+
   async function runBatch() {
     if (running) return;
     const items = occurrences();
@@ -80,16 +103,25 @@
     updatePreview();
     const progress = document.querySelector("#anny-series-root .as-progress");
     let success = 0;
+    let skipped = 0;
     const failures = [];
     for (let index = 0; index < items.length; index += 1) {
+      if (advanceBookingCutoff && new Date(items[index].end_date) >= new Date(advanceBookingCutoff)) {
+        skipped += 1;
+        continue;
+      }
       progress.textContent = `Reserviere ${index + 1} von ${items.length} …`;
       const result = await createBooking(items[index]);
       if (result.ok) success += 1;
-      else failures.push(`${items[index].start_date}: HTTP ${result.status || "Netzwerk"}`);
+      else {
+        failures.push(`${items[index].start_date}: HTTP ${result.status || "Netzwerk"}`);
+        const cutoff = AnnyRecurrence.parseUnavailableIntervalCutoff(result.error, document.querySelector('#anny-series-root [name="timezone"]').value.trim());
+        if (cutoff) advanceBookingCutoff = cutoff;
+      }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     running = false;
-    progress.textContent = `${success} erfolgreich, ${failures.length} fehlgeschlagen.${failures.length ? ` ${failures.slice(0, 3).join("; ")}` : ""}`;
+    progress.textContent = `${success} erfolgreich, ${failures.length} fehlgeschlagen, ${skipped} wegen Vorausbuchungslimit übersprungen.${failures.length ? ` ${failures.slice(0, 3).join("; ")}` : ""}`;
     updatePreview();
   }
 
@@ -107,7 +139,16 @@
       root.querySelector('[name="end-time"]').disabled = false;
       root.querySelector(".as-panel").hidden = false;
       root.querySelector(".as-trigger").setAttribute("aria-expanded", "true");
+      if (pendingAdvanceBookingValues.length) {
+        applyAdvanceBookingLimits(pendingAdvanceBookingValues);
+        pendingAdvanceBookingValues = [];
+      }
       updatePreview();
+    } else if (message.type === "resource-selected" && message.payload?.resource_id) {
+      showResourceSelection(message.payload);
+    } else if (message.type === "advance-booking-limits" && Array.isArray(message.values)) {
+      if (!applyAdvanceBookingLimits(message.values)) pendingAdvanceBookingValues = pendingAdvanceBookingValues.concat(message.values);
+      else updatePreview();
     } else if (message.type === "result" && pending.has(message.id)) {
       pending.get(message.id)(message);
       pending.delete(message.id);
