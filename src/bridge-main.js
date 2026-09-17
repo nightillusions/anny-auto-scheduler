@@ -70,17 +70,20 @@
   function inspectServiceConfiguration(url, body) {
     if (!String(url).startsWith(SERVICE_CONFIGURATION_ENDPOINT)) return;
     try {
-      const configurations = [];
-      const visit = (value) => {
-        if (!value || typeof value !== "object") return;
-        const attributes = value.attributes && typeof value.attributes === "object" ? value.attributes : value;
-        if (attributes.label === "Tagesbuchung" && typeof attributes.default_start_time === "string" && typeof attributes.default_end_time === "string") {
-          configurations.push({ startTime: attributes.default_start_time.slice(0, 5), endTime: attributes.default_end_time.slice(0, 5) });
-        }
-        for (const child of Object.values(value)) visit(child);
-      };
-      visit(JSON.parse(body));
-      if (configurations[0]) window.postMessage({ channel: CHANNEL, type: "default-booking-times", payload: configurations[0] }, window.location.origin);
+      const requestUrl = new URL(url, window.location.origin);
+      const serviceId = [...requestUrl.searchParams.keys()].map((key) => /^service_id\[([^\]]+)\]$/.exec(key)?.[1]).find(Boolean);
+      const response = JSON.parse(body);
+      if (response?.data?.attributes) {
+        window.postMessage({
+          channel: CHANNEL,
+          type: "service-configuration",
+          payload: {
+            serviceId,
+            resourceId: requestUrl.searchParams.get("resource_id"),
+            response: { data: response.data, included: Array.isArray(response.included) ? response.included : [] }
+          }
+        }, window.location.origin);
+      }
     } catch { /* Ignore unavailable or changed service-configuration responses. */ }
   }
 

@@ -3,10 +3,12 @@
   const CHANNEL = "anny-series-reservation-v1";
   const weekdays = [[1, "Mo"], [2, "Di"], [3, "Mi"], [4, "Do"], [5, "Fr"], [6, "Sa"], [0, "So"]];
   let template = null;
+  let selectedResource = null;
+  let bookingTimeRules = null;
   let running = false;
   let advanceBookingCutoff = null;
   let pendingAdvanceBookingValues = [];
-  let pendingDefaultBookingTimes = null;
+  const serviceConfigurations = [];
   const pending = new Map();
 
   function escapeHtml(value) {
@@ -25,6 +27,7 @@
           <label>Zeitraum <span><input name="days" type="number" min="1" max="365" value="30"> Tage</span></label>
           <fieldset><legend>Wochentage</legend><div class="as-days">${weekdays.map(([value, label]) => `<label><input type="checkbox" value="${value}" ${value > 0 && value < 6 ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset>
           <div class="as-times"><label>Von <input name="start-time" type="time" step="60" required></label><label>Bis <input name="end-time" type="time" step="60" required></label></div>
+          <div class="as-time-rules" hidden></div>
           <label>Zeitzone <input name="timezone" type="text" value="${escapeHtml(Intl.DateTimeFormat().resolvedOptions().timeZone)}" required></label>
           <div class="as-preview"></div>
           <button class="as-submit" type="button" disabled>Reservierungen prüfen</button>
@@ -51,18 +54,42 @@
     mount();
     const root = document.getElementById("anny-series-root");
     if (!root) return;
+    const selectionChanged = !template || String(template.resource_id) !== String(selection.resource_id) || String(template.service_id) !== String(selection.service_id);
+    if (selectionChanged) {
+      template = null;
+      root.querySelector(".as-submit").disabled = true;
+    }
+    selectedResource = selection;
+    bookingTimeRules = null;
     const service = selection.service_id ? ` · Service ${escapeHtml(selection.service_id)}` : "";
     root.querySelector(".as-template").innerHTML = `<b>Ressource ausgewählt</b><span>Ressource ${escapeHtml(selection.resource_id)}${service}<br>Lege eine normale Reservierung an, um Zeitraum und Optionen als Vorlage zu übernehmen.</span>`;
     root.querySelector(".as-panel").hidden = false;
     root.querySelector(".as-trigger").setAttribute("aria-expanded", "true");
+    applyCurrentServiceConfiguration(true);
   }
 
-  function applyDefaultBookingTimes(times) {
+  function applyCurrentServiceConfiguration(applyDefaults) {
     const root = document.getElementById("anny-series-root");
-    if (!root || !/^\d{2}:\d{2}$/.test(times?.startTime) || !/^\d{2}:\d{2}$/.test(times?.endTime)) return false;
-    root.querySelector('[name="start-time"]').value = times.startTime;
-    root.querySelector('[name="end-time"]').value = times.endTime;
-    return true;
+    if (!root || !selectedResource) return;
+    const configuration = [...serviceConfigurations].reverse().find((item) =>
+      (!item.resourceId || item.resourceId === String(selectedResource.resource_id)) &&
+      (!item.serviceId || item.serviceId === String(selectedResource.service_id))
+    );
+    if (!configuration) return;
+    const rules = AnnyRecurrence.extractBookingTimeRules(configuration.response);
+    if (!rules || (configuration.serviceId && rules.serviceId && configuration.serviceId !== rules.serviceId)) return;
+    bookingTimeRules = rules;
+    if (applyDefaults) {
+      root.querySelector('[name="start-time"]').value = rules.startTime;
+      root.querySelector('[name="end-time"]').value = rules.endTime;
+    }
+    const formatDuration = (minutes) => minutes % 60 === 0 ? `${minutes / 60} Std.` : `${minutes} Min.`;
+    const duration = rules.minDuration != null && rules.maxDuration != null ? `Dauer: ${formatDuration(rules.minDuration)} bis ${formatDuration(rules.maxDuration)}` : "";
+    const interval = rules.bookingInterval ? `Start im ${rules.bookingInterval}-Minuten-Intervall` : "";
+    const schedule = !rules.allowsCrossSchedule || !rules.allowEndOffSchedule ? "Ressourcenzeitplan wird von Anny geprüft" : "";
+    const note = root.querySelector(".as-time-rules");
+    note.textContent = [rules.label, duration, interval, schedule].filter(Boolean).join(" · ");
+    note.hidden = false;
   }
 
   function occurrences() {
@@ -73,7 +100,9 @@
       timeZone: root.querySelector('[name="timezone"]').value.trim(),
       startTime: root.querySelector('[name="start-time"]').value,
       endTime: root.querySelector('[name="end-time"]').value,
-      latestEnd: advanceBookingCutoff
+      latestEnd: advanceBookingCutoff,
+      minDuration: bookingTimeRules?.minDuration,
+      maxDuration: bookingTimeRules?.maxDuration
     });
   }
 
@@ -144,15 +173,13 @@
     if (event.source !== window || event.origin !== window.location.origin || message?.channel !== CHANNEL) return;
     if (message.type === "template") {
       template = message.payload;
+      selectedResource = { resource_id: template.resource_id, service_id: template.service_id };
       mount();
       const root = document.getElementById("anny-series-root");
       root.querySelector(".as-template").innerHTML = `<b>Vorlage erkannt</b><span>Ressource ${escapeHtml(template.resource_id)} · Service ${escapeHtml(template.service_id)}<br>${escapeHtml(template.start_date)} – ${escapeHtml(template.end_date)}</span>`;
       root.querySelector('[name="start-time"]').value = template.start_date.slice(11, 16);
       root.querySelector('[name="end-time"]').value = template.end_date.slice(11, 16);
-      if (pendingDefaultBookingTimes) {
-        applyDefaultBookingTimes(pendingDefaultBookingTimes);
-        pendingDefaultBookingTimes = null;
-      }
+      applyCurrentServiceConfiguration(false);
       root.querySelector(".as-panel").hidden = false;
       root.querySelector(".as-trigger").setAttribute("aria-expanded", "true");
       if (pendingAdvanceBookingValues.length) {
@@ -162,9 +189,10 @@
       updatePreview();
     } else if (message.type === "resource-selected" && message.payload?.resource_id) {
       showResourceSelection(message.payload);
-    } else if (message.type === "default-booking-times") {
-      if (!applyDefaultBookingTimes(message.payload)) pendingDefaultBookingTimes = message.payload;
-      else updatePreview();
+    } else if (message.type === "service-configuration" && message.payload?.response) {
+      serviceConfigurations.push(message.payload);
+      applyCurrentServiceConfiguration(!template);
+      updatePreview();
     } else if (message.type === "advance-booking-limits" && Array.isArray(message.values)) {
       if (!applyAdvanceBookingLimits(message.values)) pendingAdvanceBookingValues = pendingAdvanceBookingValues.concat(message.values);
       else updatePreview();

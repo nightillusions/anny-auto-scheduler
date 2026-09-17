@@ -48,17 +48,28 @@
   }
 
   function extractDefaultBookingTimes(data) {
-    const configurations = [];
-    const visit = (value) => {
-      if (!value || typeof value !== "object") return;
-      const attributes = value.attributes && typeof value.attributes === "object" ? value.attributes : value;
-      if (attributes.label === "Tagesbuchung" && typeof attributes.default_start_time === "string" && typeof attributes.default_end_time === "string") {
-        configurations.push({ startTime: attributes.default_start_time.slice(0, 5), endTime: attributes.default_end_time.slice(0, 5) });
-      }
-      for (const child of Object.values(value)) visit(child);
+    const rules = extractBookingTimeRules(data);
+    return rules?.label === "Tagesbuchung" ? { startTime: rules.startTime, endTime: rules.endTime } : null;
+  }
+
+  function extractBookingTimeRules(data) {
+    const configuration = data?.data && !Array.isArray(data.data) ? data.data : null;
+    const attributes = configuration?.attributes;
+    if (!attributes || typeof attributes.label !== "string" || !/^\d{2}:\d{2}/.test(attributes.default_start_time) || !/^\d{2}:\d{2}/.test(attributes.default_end_time)) return null;
+    const serviceId = attributes.services_with_quantity?.[0]?.service?.id;
+    const service = data.included?.find((item) => item?.type === "services" && String(item.id) === String(serviceId));
+    const integerOrNull = (value) => Number.isInteger(value) && value >= 0 ? value : null;
+    return {
+      label: attributes.label,
+      serviceId: serviceId == null ? null : String(serviceId),
+      startTime: attributes.default_start_time.slice(0, 5),
+      endTime: attributes.default_end_time.slice(0, 5),
+      minDuration: integerOrNull(attributes.min_duration),
+      maxDuration: integerOrNull(attributes.max_duration),
+      bookingInterval: integerOrNull(service?.attributes?.booking_interval ?? attributes.booking_interval),
+      allowsCrossSchedule: attributes.allows_cross_schedule === true,
+      allowEndOffSchedule: service?.attributes?.allow_end_off_schedule === true
     };
-    visit(data);
-    return configurations[0] || null;
   }
 
   function extractAdvanceBookingCutoff(data, timeZone, now = new Date()) {
@@ -116,6 +127,9 @@
     if (endDayDelta === 0 && (endTime[0] * 3600 + endTime[1] * 60 + endTime[2]) <= (startTime[0] * 3600 + startTime[1] * 60 + startTime[2])) {
       throw new RangeError("Die Endzeit muss nach der Startzeit liegen.");
     }
+    const durationMinutes = endDayDelta * 1440 + (endTime[0] * 60 + endTime[1]) - (startTime[0] * 60 + startTime[1]);
+    if (Number.isInteger(options.minDuration) && durationMinutes < options.minDuration) throw new RangeError(`Die Buchungsdauer muss mindestens ${options.minDuration} Minuten betragen.`);
+    if (Number.isInteger(options.maxDuration) && durationMinutes > options.maxDuration) throw new RangeError(`Die Buchungsdauer darf höchstens ${options.maxDuration} Minuten betragen.`);
     const results = [];
     for (let day = 1; day <= horizon; day += 1) {
       const startDate = addDays(originalStart, day);
@@ -135,7 +149,7 @@
     return results;
   }
 
-  const api = Object.freeze({ buildOccurrences, extractAdvanceBookingCutoff, extractDefaultBookingTimes, parseLocal, parseUnavailableIntervalCutoff, zonedIso });
+  const api = Object.freeze({ buildOccurrences, extractAdvanceBookingCutoff, extractBookingTimeRules, extractDefaultBookingTimes, parseLocal, parseUnavailableIntervalCutoff, zonedIso });
   root.AnnyRecurrence = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof globalThis === "undefined" ? window : globalThis);
