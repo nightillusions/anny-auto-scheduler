@@ -24,7 +24,7 @@
           <div class="as-template" role="status">Lege zuerst eine normale Reservierung an. Deren Ressource und Optionen werden automatisch als Vorlage übernommen.</div>
           <label>Zeitraum <span><input name="days" type="number" min="1" max="365" value="30"> Tage</span></label>
           <fieldset><legend>Wochentage</legend><div class="as-days">${weekdays.map(([value, label]) => `<label><input type="checkbox" value="${value}" ${value > 0 && value < 6 ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset>
-          <div class="as-times"><label>Von <input name="start-time" type="time" step="60" required disabled></label><label>Bis <input name="end-time" type="time" step="60" required disabled></label></div>
+          <div class="as-times"><label>Von <input name="start-time" type="time" step="60" required></label><label>Bis <input name="end-time" type="time" step="60" required></label></div>
           <label>Zeitzone <input name="timezone" type="text" value="${escapeHtml(Intl.DateTimeFormat().resolvedOptions().timeZone)}" required></label>
           <div class="as-preview"></div>
           <button class="as-submit" type="button" disabled>Reservierungen prüfen</button>
@@ -37,7 +37,12 @@
     const panel = root.querySelector(".as-panel");
     const toggle = (open) => { panel.hidden = !open; trigger.setAttribute("aria-expanded", String(open)); };
     trigger.addEventListener("click", () => toggle(panel.hidden));
-    root.querySelector(".as-close").addEventListener("click", () => toggle(false));
+    root.addEventListener("pointerdown", (event) => event.stopPropagation());
+    root.addEventListener("click", (event) => event.stopPropagation());
+    root.querySelector(".as-close").addEventListener("click", (event) => {
+      event.stopImmediatePropagation();
+      toggle(false);
+    });
     root.querySelector(".as-submit").addEventListener("click", runBatch);
     root.addEventListener("change", updatePreview);
   }
@@ -144,8 +149,6 @@
       root.querySelector(".as-template").innerHTML = `<b>Vorlage erkannt</b><span>Ressource ${escapeHtml(template.resource_id)} · Service ${escapeHtml(template.service_id)}<br>${escapeHtml(template.start_date)} – ${escapeHtml(template.end_date)}</span>`;
       root.querySelector('[name="start-time"]').value = template.start_date.slice(11, 16);
       root.querySelector('[name="end-time"]').value = template.end_date.slice(11, 16);
-      root.querySelector('[name="start-time"]').disabled = false;
-      root.querySelector('[name="end-time"]').disabled = false;
       if (pendingDefaultBookingTimes) {
         applyDefaultBookingTimes(pendingDefaultBookingTimes);
         pendingDefaultBookingTimes = null;
