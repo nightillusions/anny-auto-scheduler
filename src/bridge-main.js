@@ -6,6 +6,7 @@
   const CHANNEL = "anny-series-reservation-v1";
   const ENDPOINT = "https://b.anny.eu/api/v1/bookings/instant";
   const LOCATIONS_ENDPOINT = "https://b.anny.eu/api/v1/resources/locations";
+  const SERVICE_CONFIGURATION_ENDPOINT = "https://b.anny.eu/api/v1/service-configuration";
   const RESOURCE_CHILDREN_PATTERN = /^https:\/\/b\.anny\.eu\/api\/v1\/resources\/([^/?]+)\/children(?:[/?]|$)/;
   let credentials = null;
 
@@ -66,6 +67,23 @@
     } catch { /* Ignore unavailable or changed locations responses. */ }
   }
 
+  function inspectServiceConfiguration(url, body) {
+    if (!String(url).startsWith(SERVICE_CONFIGURATION_ENDPOINT)) return;
+    try {
+      const configurations = [];
+      const visit = (value) => {
+        if (!value || typeof value !== "object") return;
+        const attributes = value.attributes && typeof value.attributes === "object" ? value.attributes : value;
+        if (attributes.label === "Tagesbuchung" && typeof attributes.default_start_time === "string" && typeof attributes.default_end_time === "string") {
+          configurations.push({ startTime: attributes.default_start_time.slice(0, 5), endTime: attributes.default_end_time.slice(0, 5) });
+        }
+        for (const child of Object.values(value)) visit(child);
+      };
+      visit(JSON.parse(body));
+      if (configurations[0]) window.postMessage({ channel: CHANNEL, type: "default-booking-times", payload: configurations[0] }, window.location.origin);
+    } catch { /* Ignore unavailable or changed service-configuration responses. */ }
+  }
+
   const nativeFetch = window.fetch.bind(window);
   window.fetch = function monitoredFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input.url;
@@ -80,6 +98,7 @@
     inspectResourceSelection(url, merged);
     const response = nativeFetch(input, init);
     if (String(url).startsWith(LOCATIONS_ENDPOINT)) response.then((result) => result.clone().text().then((body) => inspectLocations(url, body)).catch(() => {})).catch(() => {});
+    if (String(url).startsWith(SERVICE_CONFIGURATION_ENDPOINT)) response.then((result) => result.clone().text().then((body) => inspectServiceConfiguration(url, body)).catch(() => {})).catch(() => {});
     return response;
   };
 
@@ -101,6 +120,9 @@
     if (this.__annySeriesRequest) inspectResourceSelection(this.__annySeriesRequest.url, this.__annySeriesRequest);
     if (this.__annySeriesRequest && String(this.__annySeriesRequest.url).startsWith(LOCATIONS_ENDPOINT)) {
       this.addEventListener("loadend", () => inspectLocations(this.__annySeriesRequest.url, this.responseText), { once: true });
+    }
+    if (this.__annySeriesRequest && String(this.__annySeriesRequest.url).startsWith(SERVICE_CONFIGURATION_ENDPOINT)) {
+      this.addEventListener("loadend", () => inspectServiceConfiguration(this.__annySeriesRequest.url, this.responseText), { once: true });
     }
     return nativeSend.call(this, body);
   };

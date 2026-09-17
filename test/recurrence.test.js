@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { buildOccurrences, extractAdvanceBookingCutoff, parseUnavailableIntervalCutoff } = require("../src/recurrence.js");
+const { buildOccurrences, extractAdvanceBookingCutoff, extractDefaultBookingTimes, parseUnavailableIntervalCutoff } = require("../src/recurrence.js");
 
 test("filters weekdays and keeps resource options", () => {
   const result = buildOccurrences({ resource_id: "110091", service_id: "307", start_date: "2026-09-26T06:00:00+02:00", end_date: "2026-09-26T13:00:00+02:00" }, { days: 7, weekdays: [1], timeZone: "Europe/Berlin" });
@@ -46,4 +46,9 @@ test("extracts an advance-booking period from locations responses", () => {
   const response = { data: [{ attributes: { booking_in_advance_days: 14 } }] };
   const now = new Date("2026-09-17T10:00:00+02:00");
   assert.equal(extractAdvanceBookingCutoff(response, "Europe/Berlin", now), "2026-10-01T23:59:00+02:00");
+});
+
+test("extracts Tagesbuchung default times from service configurations", () => {
+  const response = { data: [{ attributes: { label: "Stundenbuchung", default_start_time: "08:00:00", default_end_time: "09:00:00" } }, { attributes: { label: "Tagesbuchung", default_start_time: "07:30:00", default_end_time: "18:15:00" } }] };
+  assert.deepEqual(extractDefaultBookingTimes(response), { startTime: "07:30", endTime: "18:15" });
 });

@@ -47,6 +47,20 @@
     }
   }
 
+  function extractDefaultBookingTimes(data) {
+    const configurations = [];
+    const visit = (value) => {
+      if (!value || typeof value !== "object") return;
+      const attributes = value.attributes && typeof value.attributes === "object" ? value.attributes : value;
+      if (attributes.label === "Tagesbuchung" && typeof attributes.default_start_time === "string" && typeof attributes.default_end_time === "string") {
+        configurations.push({ startTime: attributes.default_start_time.slice(0, 5), endTime: attributes.default_end_time.slice(0, 5) });
+      }
+      for (const child of Object.values(value)) visit(child);
+    };
+    visit(data);
+    return configurations[0] || null;
+  }
+
   function extractAdvanceBookingCutoff(data, timeZone, now = new Date()) {
     const candidates = [];
     const isLimitKey = (path) => /(advance|ahead|future|voraus)/i.test(path) && /(book|reserv|period|window|range|limit)/i.test(path);
@@ -121,7 +135,7 @@
     return results;
   }
 
-  const api = Object.freeze({ buildOccurrences, extractAdvanceBookingCutoff, parseLocal, parseUnavailableIntervalCutoff, zonedIso });
+  const api = Object.freeze({ buildOccurrences, extractAdvanceBookingCutoff, extractDefaultBookingTimes, parseLocal, parseUnavailableIntervalCutoff, zonedIso });
   root.AnnyRecurrence = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof globalThis === "undefined" ? window : globalThis);

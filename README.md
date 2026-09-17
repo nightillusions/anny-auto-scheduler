@@ -5,7 +5,8 @@ Eine Manifest-V3-Erweiterung, die eine normale Reservierung auf `https://anny.eu
 ## Funktionsweise
 
 1. Die Erweiterung öffnet das Panel, wenn Anny nach dem Anklicken einer Ressource `GET https://b.anny.eu/api/v1/resources/{resource}/children` abfragt. Die Anfrage liefert Ressource und Service, aber bei `data: []` ausdrücklich keine Buchungsvorlage.
-2. Nach einer normalen Reservierung übernimmt sie aus `POST https://b.anny.eu/api/v1/bookings/instant` zusätzlich die konkrete Ressource, den Service sowie lokale Start-/Endzeit als Vorlage und aktiviert die Serienbuchung.
+2. Beim Laden von `GET https://b.anny.eu/api/v1/service-configuration` übernimmt sie für die Konfiguration mit `label: "Tagesbuchung"` `default_start_time` und `default_end_time` als vorausgefüllte Uhrzeiten.
+3. Nach einer normalen Reservierung übernimmt sie aus `POST https://b.anny.eu/api/v1/bookings/instant` zusätzlich die konkrete Ressource, den Service sowie lokale Start-/Endzeit als Vorlage und aktiviert die Serienbuchung.
 3. Nutzer wählen 1–365 kommende Kalendertage, Wochentage, Start-/Endzeit und die Zeitzone. Der Ausgangstag wird absichtlich nicht erneut gebucht.
 4. Nach einer expliziten Bestätigung werden die zusätzlichen Reservierungen nacheinander erstellt. Resultate werden einzeln angezeigt; Konflikte werden nicht überschrieben.
 

@@ -6,6 +6,7 @@
   let running = false;
   let advanceBookingCutoff = null;
   let pendingAdvanceBookingValues = [];
+  let pendingDefaultBookingTimes = null;
   const pending = new Map();
 
   function escapeHtml(value) {
@@ -49,6 +50,14 @@
     root.querySelector(".as-template").innerHTML = `<b>Ressource ausgewählt</b><span>Ressource ${escapeHtml(selection.resource_id)}${service}<br>Lege eine normale Reservierung an, um Zeitraum und Optionen als Vorlage zu übernehmen.</span>`;
     root.querySelector(".as-panel").hidden = false;
     root.querySelector(".as-trigger").setAttribute("aria-expanded", "true");
+  }
+
+  function applyDefaultBookingTimes(times) {
+    const root = document.getElementById("anny-series-root");
+    if (!root || !/^\d{2}:\d{2}$/.test(times?.startTime) || !/^\d{2}:\d{2}$/.test(times?.endTime)) return false;
+    root.querySelector('[name="start-time"]').value = times.startTime;
+    root.querySelector('[name="end-time"]').value = times.endTime;
+    return true;
   }
 
   function occurrences() {
@@ -137,6 +146,10 @@
       root.querySelector('[name="end-time"]').value = template.end_date.slice(11, 16);
       root.querySelector('[name="start-time"]').disabled = false;
       root.querySelector('[name="end-time"]').disabled = false;
+      if (pendingDefaultBookingTimes) {
+        applyDefaultBookingTimes(pendingDefaultBookingTimes);
+        pendingDefaultBookingTimes = null;
+      }
       root.querySelector(".as-panel").hidden = false;
       root.querySelector(".as-trigger").setAttribute("aria-expanded", "true");
       if (pendingAdvanceBookingValues.length) {
@@ -146,6 +159,9 @@
       updatePreview();
     } else if (message.type === "resource-selected" && message.payload?.resource_id) {
       showResourceSelection(message.payload);
+    } else if (message.type === "default-booking-times") {
+      if (!applyDefaultBookingTimes(message.payload)) pendingDefaultBookingTimes = message.payload;
+      else updatePreview();
     } else if (message.type === "advance-booking-limits" && Array.isArray(message.values)) {
       if (!applyAdvanceBookingLimits(message.values)) pendingAdvanceBookingValues = pendingAdvanceBookingValues.concat(message.values);
       else updatePreview();
