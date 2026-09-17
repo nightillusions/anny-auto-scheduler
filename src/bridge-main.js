@@ -9,6 +9,7 @@
   const SERVICE_CONFIGURATION_ENDPOINT = "https://b.anny.eu/api/v1/service-configuration";
   const RESOURCE_CHILDREN_PATTERN = /^https:\/\/b\.anny\.eu\/api\/v1\/resources\/([^/?]+)\/children(?:[/?]|$)/;
   let credentials = null;
+  const serviceConfigurations = new Map();
 
   function headerValue(headers, name) {
     try { return new Headers(headers || {}).get(name); } catch { return null; }
@@ -73,15 +74,17 @@
       const requestUrl = new URL(url, window.location.origin);
       const serviceId = [...requestUrl.searchParams.keys()].map((key) => /^service_id\[([^\]]+)\]$/.exec(key)?.[1]).find(Boolean);
       const response = JSON.parse(body);
-      if (response?.data?.attributes) {
+      if (response?.data) {
+        const payload = {
+          serviceId,
+          resourceId: requestUrl.searchParams.get("resource_id"),
+          response: { data: response.data, included: Array.isArray(response.included) ? response.included : [] }
+        };
+        serviceConfigurations.set(`${payload.resourceId || ""}:${payload.serviceId || ""}`, payload);
         window.postMessage({
           channel: CHANNEL,
           type: "service-configuration",
-          payload: {
-            serviceId,
-            resourceId: requestUrl.searchParams.get("resource_id"),
-            response: { data: response.data, included: Array.isArray(response.included) ? response.included : [] }
-          }
+          payload
         }, window.location.origin);
       }
     } catch { /* Ignore unavailable or changed service-configuration responses. */ }
@@ -132,7 +135,12 @@
 
   window.addEventListener("message", async (event) => {
     const message = event.data;
-    if (event.source !== window || event.origin !== window.location.origin || message?.channel !== CHANNEL || message.type !== "create") return;
+    if (event.source !== window || event.origin !== window.location.origin || message?.channel !== CHANNEL) return;
+    if (message.type === "ready") {
+      for (const payload of serviceConfigurations.values()) window.postMessage({ channel: CHANNEL, type: "service-configuration", payload }, window.location.origin);
+      return;
+    }
+    if (message.type !== "create") return;
     if (!credentials) {
       window.postMessage({ channel: CHANNEL, type: "result", id: message.id, ok: false, status: 401, error: "Keine aktive Anny-Anmeldung erkannt." }, window.location.origin);
       return;

@@ -201,5 +201,6 @@
       pending.delete(message.id);
     }
   });
+  window.postMessage({ channel: CHANNEL, type: "ready" }, window.location.origin);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true }); else mount();
 })();

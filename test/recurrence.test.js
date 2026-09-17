@@ -49,7 +49,7 @@ test("extracts an advance-booking period from locations responses", () => {
 });
 
 test("extracts Tagesbuchung default times from service configurations", () => {
-  const response = { data: { attributes: { label: "Tagesbuchung", default_start_time: "07:30:00", default_end_time: "18:15:00", services_with_quantity: [] } } };
+  const response = { data: [{ attributes: { label: "Tagesbuchung", default_start_time: "07:30:00", default_end_time: "18:15:00", services_with_quantity: [] } }] };
   assert.deepEqual(extractDefaultBookingTimes(response), { startTime: "07:30", endTime: "18:15" });
 });
 

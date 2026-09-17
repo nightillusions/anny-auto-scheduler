@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Anny Serienreservierung",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Wiederholt eine in Anny angelegte Reservierung an ausgewählten Wochentagen.",
   "permissions": [],
   "host_permissions": [

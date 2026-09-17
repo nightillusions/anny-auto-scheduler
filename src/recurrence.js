@@ -53,9 +53,10 @@
   }
 
   function extractBookingTimeRules(data) {
-    const configuration = data?.data && !Array.isArray(data.data) ? data.data : null;
+    const configurations = Array.isArray(data?.data) ? data.data : data?.data ? [data.data] : [];
+    const configuration = configurations.find((item) => item?.attributes && typeof item.attributes.label === "string" && /^\d{2}:\d{2}/.test(item.attributes.default_start_time) && /^\d{2}:\d{2}/.test(item.attributes.default_end_time));
     const attributes = configuration?.attributes;
-    if (!attributes || typeof attributes.label !== "string" || !/^\d{2}:\d{2}/.test(attributes.default_start_time) || !/^\d{2}:\d{2}/.test(attributes.default_end_time)) return null;
+    if (!attributes) return null;
     const serviceId = attributes.services_with_quantity?.[0]?.service?.id;
     const service = data.included?.find((item) => item?.type === "services" && String(item.id) === String(serviceId));
     const integerOrNull = (value) => Number.isInteger(value) && value >= 0 ? value : null;
