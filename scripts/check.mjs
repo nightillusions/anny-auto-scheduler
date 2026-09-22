@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-const files = ["src/background.js", "src/bridge-main.js", "src/content.js", "src/recurrence.js"];
+const files = ["src/bridge-main.js", "src/content.js", "src/recurrence.js"];
 
 for (const file of files) {
   const source = await readFile(file, "utf8");
